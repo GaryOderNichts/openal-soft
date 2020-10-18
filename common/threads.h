@@ -129,14 +129,33 @@ inline int altss_set(altss_t tss_id, void *val)
 
 #include <stdint.h>
 #include <errno.h>
+#ifdef __WIIU__
+#include "wut_thread_compat.h"
+#include <coreinit/thread.h>
+#include <coreinit/mutex.h>
+#include <coreinit/condition.h>
+#include <coreinit/atomic.h>
+#else
 #include <pthread.h>
+#endif
 #ifdef __APPLE__
 #include <dispatch/dispatch.h>
-#else /* !__APPLE__ */
+#elif __WIIU__
+#include <coreinit/semaphore.h>
+#else
 #include <semaphore.h>
-#endif /* __APPLE__ */
+#endif
 
+#ifdef __WIIU__
+typedef OSThread* althrd_t;
+typedef OSMutex almtx_t;
+typedef OSCondition alcnd_t;
+typedef OSSemaphore alsem_t;
+typedef __wut_key_t altss_t;
+typedef uint32_t alonce_flag;
 
+#define AL_ONCE_FLAG_INIT 0
+#else
 typedef pthread_t althrd_t;
 typedef pthread_mutex_t almtx_t;
 typedef pthread_cond_t alcnd_t;
@@ -149,7 +168,86 @@ typedef pthread_key_t altss_t;
 typedef pthread_once_t alonce_flag;
 
 #define AL_ONCE_FLAG_INIT PTHREAD_ONCE_INIT
+#endif
 
+#ifdef __WIIU__
+
+inline althrd_t althrd_current(void)
+{
+    return OSGetCurrentThread();
+}
+
+inline int althrd_equal(althrd_t thr0, althrd_t thr1)
+{
+    return thr0->id == thr1->id;
+}
+
+inline void althrd_exit(int res)
+{
+    OSExitThread(res);
+}
+
+inline void althrd_yield(void)
+{
+    OSYieldThread();
+}
+
+inline int althrd_sleep(const struct timespec *ts, struct timespec *rem)
+{
+    int ret = nanosleep(ts, rem);
+    if(ret != 0)
+    {
+        ret = ((errno==EINTR) ? -1 : -2);
+        errno = 0;
+    }
+    return ret;
+}
+
+inline int almtx_lock(almtx_t *mtx)
+{
+    OSLockMutex(mtx);
+    return althrd_success;
+}
+
+inline int almtx_unlock(almtx_t *mtx)
+{
+    OSUnlockMutex(mtx);
+    return althrd_success;
+}
+
+inline int almtx_trylock(almtx_t *mtx)
+{
+    return !OSTryLockMutex(mtx);
+}
+
+inline void *altss_get(altss_t tss_id)
+{
+    return wut_getspecific(tss_id);
+}
+
+inline int altss_set(altss_t tss_id, void *val)
+{
+    return wut_setspecific(tss_id, val);
+}
+
+inline void alcall_once(alonce_flag *once, void (*callback)(void))
+{
+    uint32_t value = 0;
+
+    if (OSCompareAndSwapAtomicEx(once, 0, 1, &value)) 
+    {
+        callback();
+        OSCompareAndSwapAtomic(once, 1, 2);
+    }
+
+    while (*once != 2)
+        OSYieldThread();
+}
+
+inline void althrd_deinit(void) { }
+inline void althrd_thread_detach(void) { }
+
+#else
 
 inline althrd_t althrd_current(void)
 {
@@ -231,6 +329,7 @@ inline void alcall_once(alonce_flag *once, void (*callback)(void))
 inline void althrd_deinit(void) { }
 inline void althrd_thread_detach(void) { }
 
+#endif
 #endif
 
 

@@ -437,6 +437,160 @@ void althrd_thread_detach(void)
     UnlockUIntMapRead(&TlsDestructors);
 }
 
+#elif __WIIU__
+
+#include <sys/time.h>
+#include <unistd.h>
+#include <malloc.h>
+
+extern inline int althrd_sleep(const struct timespec *ts, struct timespec *rem);
+extern inline void alcall_once(alonce_flag *once, void (*callback)(void));
+
+extern inline void althrd_deinit(void);
+extern inline void althrd_thread_detach(void);
+
+void althrd_setname(althrd_t thr, const char *name)
+{
+    (void)thr;
+    (void)name;
+}
+
+typedef struct thread_cntr {
+    althrd_start_t func;
+    void *arg;
+} thread_cntr;
+
+static void *althrd_starter(void *arg)
+{
+    thread_cntr cntr;
+    memcpy(&cntr, arg, sizeof(cntr));
+    free(arg);
+
+    return (void*)(intptr_t)((*cntr.func)(cntr.arg));
+}
+
+static void thread_deallocator(OSThread *thread, void *stack)
+{
+    free(stack);
+    free(thread);
+}
+
+int althrd_create(althrd_t *thr, althrd_start_t func, void *arg)
+{
+    thread_cntr* cntr = malloc(sizeof(*cntr));
+    cntr->func = func;
+    cntr->arg = arg;
+
+    OSThread* thread = (OSThread *)memalign(16, sizeof(OSThread));
+
+    int stack_size = THREAD_STACK_SIZE;
+    
+    void* stack_addr = (uint8_t*) memalign(16, stack_size) + stack_size;
+
+    if (!OSCreateThread(thread, (OSThreadEntryPointFn)althrd_starter, (int)cntr, NULL, stack_addr, stack_size, 0x10, OS_THREAD_ATTRIB_AFFINITY_ANY))
+        return althrd_error;
+
+    *thr = thread;
+
+    OSSetThreadDeallocator(thread, &thread_deallocator);
+
+    OSSetThreadRunQuantum(thread, 1000);
+    OSResumeThread(thread);
+
+    return althrd_success;
+}
+
+int althrd_detach(althrd_t thr)
+{
+    OSDetachThread(thr);
+    return althrd_success;
+}
+
+int althrd_join(althrd_t thr, int *res)
+{
+    return !OSJoinThread(thr, res);
+}
+
+int almtx_init(almtx_t *mtx, int type)
+{
+    OSInitMutex(mtx);
+    return althrd_success;
+}
+
+void almtx_destroy(almtx_t *mtx) { }
+
+int alcnd_init(alcnd_t *cond)
+{
+    OSInitCond(cond);
+    return althrd_success;
+}
+
+int alcnd_signal(alcnd_t *cond)
+{
+    OSSignalCond(cond);
+    return althrd_success;
+}
+
+int alcnd_broadcast(alcnd_t *cond)
+{
+    OSSignalCond(cond);
+    return althrd_success;
+}
+
+int alcnd_wait(alcnd_t *cond, almtx_t *mtx)
+{
+    OSWaitCond(cond, mtx);
+    return althrd_success;
+}
+
+void alcnd_destroy(alcnd_t *cond) { }
+
+int alsem_init(alsem_t *sem, unsigned int initial)
+{
+    OSInitSemaphore(sem, initial);
+    return althrd_success;
+}
+
+void alsem_destroy(alsem_t *sem) { }
+
+int alsem_post(alsem_t *sem)
+{
+    OSSignalSemaphore(sem);
+    return althrd_success;
+}
+
+int alsem_wait(alsem_t *sem)
+{
+    OSWaitSemaphore(sem);
+    return althrd_success;
+}
+
+int alsem_trywait(alsem_t *sem)
+{
+    return OSTryWaitSemaphore(sem) > 0 ? althrd_success : althrd_busy;
+}
+
+int altss_create(altss_t *tss_id, altss_dtor_t callback)
+{
+    return wut_key_create(tss_id, callback);
+}
+
+void altss_delete(altss_t tss_id)
+{
+    wut_key_delete(tss_id);
+}
+
+int altimespec_get(struct timespec *ts, int base)
+{
+    if(base == AL_TIME_UTC)
+    {
+        int ret = clock_gettime(CLOCK_REALTIME, ts);
+        if(ret == 0) return base;
+    }
+
+    return 0;
+}
+
 #else
 
 #include <sys/time.h>

@@ -16,7 +16,10 @@ extern "C" {
 
 extern FILE *LogFile;
 
-#if defined(__GNUC__) && !defined(_WIN32)
+#if defined(__WIIU__)
+#include <whb/log.h>
+#define AL_PRINT(T, MSG, ...) WHBLogPrintf("AL lib: %s %s: "MSG, T, __FUNCTION__ , ## __VA_ARGS__)
+#elif defined(__GNUC__) && !defined(_WIN32)
 #define AL_PRINT(T, MSG, ...) fprintf(LogFile, "AL lib: %s %s: "MSG, T, __FUNCTION__ , ## __VA_ARGS__)
 #else
 void al_print(const char *type, const char *func, const char *fmt, ...) DECL_FORMAT(printf, 3,4);

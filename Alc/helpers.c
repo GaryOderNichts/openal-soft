@@ -102,7 +102,9 @@ DEFINE_PROPERTYKEY(PKEY_AudioEndpoint_GUID, 0x1da5d803, 0xd492, 0x4edd, 0x8c, 0x
 #ifndef _WIN32
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef __WIIU__
 #include <sys/mman.h>
+#endif
 #include <fcntl.h>
 #include <unistd.h>
 #elif defined(_WIN32_IE)
@@ -683,6 +685,12 @@ void GetProcBinary(al_string *path, al_string *fname)
     char *pathname = NULL;
     size_t pathlen;
 
+#ifdef __WIIU__
+    const char* rpxPath = "/vol/external01/wiiu/apps/re3/re3.rpx";
+    pathname = malloc(strlen(rpxPath) + 1);
+    strcpy(pathname, rpxPath);
+    pathlen = strlen(pathname);
+#endif
 #ifdef __FreeBSD__
     int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
     if(sysctl(mib, 4, NULL, &pathlen, NULL, 0) == -1)
@@ -715,6 +723,7 @@ void GetProcBinary(al_string *path, al_string *fname)
         }
     }
 #endif
+#ifndef __WIIU__
     if(!pathname)
     {
         const char *selfname;
@@ -757,6 +766,7 @@ void GetProcBinary(al_string *path, al_string *fname)
 
         pathname[len] = 0;
     }
+    #endif
 
     char *sep = strrchr(pathname, '/');
     if(sep)
@@ -980,6 +990,17 @@ struct FileMapping MapFileToMem(const char *fname)
         return ret;
     }
 
+#ifdef __WIIU__
+    ptr = calloc(1, sbuf.st_size);
+    if(ptr == NULL)
+    {
+        ERR("Failed to alloc mem for %s: (%d) %s\n", fname, errno, strerror(errno));
+        close(fd);
+        return ret;
+    }
+
+    read(fd, ptr, sbuf.st_size);
+#else
     ptr = mmap(NULL, sbuf.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if(ptr == MAP_FAILED)
     {
@@ -987,6 +1008,7 @@ struct FileMapping MapFileToMem(const char *fname)
         close(fd);
         return ret;
     }
+#endif
 
     ret.fd = fd;
     ret.ptr = ptr;
@@ -996,7 +1018,11 @@ struct FileMapping MapFileToMem(const char *fname)
 
 void UnmapFileMem(const struct FileMapping *mapping)
 {
+#ifdef __WIIU__
+    free(mapping->ptr);
+#else
     munmap(mapping->ptr, mapping->len);
+#endif
     close(mapping->fd);
 }
 
