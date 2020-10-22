@@ -2693,8 +2693,7 @@ static void FreeContext(ALCcontext *context)
 
     ReleaseALSources(context);
 #define FREE_SOURCESUBLIST(x) al_free((x)->Sources)
-    // TODO wii u/re3 segfault
-    // VECTOR_FOR_EACH(SourceSubList, context->SourceList, FREE_SOURCESUBLIST);
+    VECTOR_FOR_EACH(SourceSubList, context->SourceList, FREE_SOURCESUBLIST);
 #undef FREE_SOURCESUBLIST
     VECTOR_DEINIT(context->SourceList);
     context->NumSources = 0;
