@@ -88,7 +88,7 @@ ALSOURCEFILES_C := $(AL_COMMON_SRC) $(AL_OPENAL_SRC) $(AL_ALC_SRC)
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS	:=	-g -Wall -O2 -ffunction-sections \
+CFLAGS	:=	-Wall -O2 -ffunction-sections \
 			$(MACHDEP)
 
 CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__ \
@@ -97,8 +97,8 @@ CFLAGS	+=	$(INCLUDE) -D__WIIU__ -D__WUT__ \
 CXXFLAGS	:= $(CFLAGS) -std=gnu++14
 CFLAGS  +=  -std=gnu11
 
-ASFLAGS	:=	-g $(ARCH)
-LDFLAGS	=	-g $(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map)
+ASFLAGS	:=	$(ARCH)
+LDFLAGS	=	$(ARCH) $(RPXSPECS) -Wl,-Map,$(notdir $*.map)
 
 LIBS	:= 
 
@@ -159,7 +159,7 @@ export LIBPATHS	:=	$(foreach dir,$(LIBDIRS),-L$(dir)/lib)
 .PHONY: $(BUILD) clean all
 
 #-------------------------------------------------------------------------------
-all: lib/lib$(TARGET).a lib/lib$(TARGET)d.a
+all: lib/lib$(TARGET).a
 
 lib:
 	@[ -d $@ ] || mkdir -p $@
@@ -167,35 +167,17 @@ lib:
 release:
 	@[ -d $@ ] || mkdir -p $@
 
-debug:
-	@[ -d $@ ] || mkdir -p $@
-
-lib/lib$(TARGET).a : lib release $(SOURCES) $(INCLUDES)
+lib/lib$(TARGET).a : $(SOURCES) $(INCLUDES) | lib release
 	@$(MAKE) BUILD=release OUTPUT=$(CURDIR)/$@ \
-	BUILD_CFLAGS="-DNDEBUG=1 -O3" \
+	BUILD_CFLAGS="-DNDEBUG=1 -O2" \
 	DEPSDIR=$(CURDIR)/release \
 	--no-print-directory -C release \
 	-f $(CURDIR)/Makefile
 
-lib/lib$(TARGET)d.a : lib debug $(SOURCES) $(INCLUDES)
-	@$(MAKE) BUILD=debug OUTPUT=$(CURDIR)/$@ \
-	BUILD_CFLAGS="-DDEBUG=1 -Og" \
-	DEPSDIR=$(CURDIR)/debug \
-	--no-print-directory -C debug \
-	-f $(CURDIR)/Makefile
-
-dist-bin: all
-	@tar --exclude=*~ -cjf lib$(TARGET).tar.bz2 include lib
-
-dist-src:
-	@tar --exclude=*~ -cjf lib$(TARGET)-src.tar.bz2 include source Makefile
-
-dist: dist-src dist-bin
-
 #-------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr release debug lib *.bz2
+	@rm -fr release lib
 
 #-------------------------------------------------------------------------------
 else
